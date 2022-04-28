@@ -18,24 +18,25 @@ np.set_printoptions(suppress=True)
 a = 1.1
 b = 0.8
 
+# a = 1.3
+# b = 0.9
+
 epsilon = 0.0001
 
-# a = 0.9
-# b = 1.2
 
-h = 0.02
+h = 0.2
 
 grid_size = int(1 / h)
 
 
 def exact_function(x, y):
-    # return np.cos(2 * x) * np.sin(y) + y * y * y
+    # return np.cos(2 * x - y ** 2) + y * x
     return np.sin(y * y) + x * x * y
 
 
 def f(x, y):
-    # return a * 4 * np.cos(2 * x) * np.sin(y) + b * np.cos(2 * x) * np.sin(y) - b * 6 * y
-    return -a * 2 * y - b * (2 * np.cos(y * y) - 2 * y*y * np.sin(y * y))
+    # return -a * (-4 * np.cos(2 * x - y ** 2)) - b * (2 * np.sin(2 * x - y ** 2) - 4 * y ** 2 * np.cos(2 * x - y ** 2))
+    return -a * 2 * y - b * 2 * (np.cos(y * y) - 2 * y *y * np.sin(y * y))
 
 
 def createMatrix(grid_size):
@@ -82,24 +83,20 @@ def createB(h, grid_size, u):
         # adding boundary conditions
         if (f_index1 - 1) == 0:
             B[i] += -c_1 * u[f_index1 - 1, f_index2]
-            print(f_index1-1, f_index2)
 
 
         if (f_index1 + 1) == grid_size - 1:
             B[i] += -c_1 * u[f_index1 + 1, f_index2]
-            print(f_index1 + 1, f_index2)
+
 
 
         if (f_index2 - 1) == 0:
             B[i] += -c_2 * u[f_index1, f_index2 - 1]
-            print(f_index1, f_index2-1)
 
 
         if (f_index2 + 1) == grid_size - 1:
             B[i] += -c_2 * u[f_index1, f_index2 + 1]
-            print(f_index1, f_index2+1)
 
-        print()
         # calculating f indexes
         f_index1 = f_index1 + 1
         if f_index1 == grid_size - 1:
@@ -108,36 +105,11 @@ def createB(h, grid_size, u):
             if f_index2 == grid_size - 1:
                 f_index2 = 1
 
-    # c_1 = -a / (h * h)
-    # c_2 = -b / (h * h)
-    # for j in range(1, grid_size - 1):
-    #     for i in range(1, grid_size - 1):
-    #         row = (j - 1) * (grid_size - 2) + i - 1
-    #
-    #         if u[j][i - 1] != np.inf:
-    #             B[row] -= c_1 * u[j][i - 1]
-    #
-    #         if u[j][i + 1] != np.inf:
-    #             B[row] -= c_1 * u[j][i + 1]
-    #
-    #         if u[j - 1][i] != np.inf:
-    #             B[row] -= c_2 * u[j - 1][i]
-    #
-    #         if u[j + 1][i] != np.inf:
-    #             B[row] -= c_2 * u[j + 1][i]
-    #
-    #         B[row] += f(i * h, j * h)
-
-
-
-
     return B
 
 
 x = np.linspace(0, 1, grid_size + 1)
 u = np.zeros((grid_size + 1, grid_size + 1))
-u.fill(np.inf)
-
 
 
 # u[0] = exact_function(0, x[:])
@@ -193,7 +165,7 @@ while error > epsilon:
 
     eigenVector = eigenVector / lambda_new
 
-    error = abs(lambda_new - lambda_old)
+    error = np.linalg.norm(A.dot(eigenVector) - eigenVector*lambda_new)/lambda_new
     lambda_old = lambda_new
     if (count % 10 == 0) & (h < 0.02):
         sys.stdout.write(f"\r abs: {error}")
@@ -204,9 +176,6 @@ if (h < 0.02):
 
 print("largest eigenvalue is", lambda_new)
 eigenSum = lambda_new
-
-# if (np.max(A.dot(eigenVector) - eigenVector*eigenSum - np.zeros((grid_size - 1) * (grid_size - 1))) < 1):
-#     print("eigenvalue is correct")
 
 
 # calculating smallest eigenvalue
@@ -230,8 +199,10 @@ while error > epsilon:
 
     eigenVector = eigenVector / lambda_new
 
-    error = abs(lambda_new - lambda_old)
+    error = np.linalg.norm(reverseA.dot(eigenVector) - eigenVector*lambda_new)/lambda_new
+
     lambda_old = lambda_new
+
     if (count % 10 == 0) & (h < 0.02):
         sys.stdout.write(f"\r abs: {error}")
         sys.stdout.flush()
@@ -241,11 +212,6 @@ if (h < 0.02):
     print()
 
 print("smallest eigenvalue is", eigenSum - lambda_new)
-
-# if (np.max(A.dot(eigenVector) - eigenVector*(eigenSum - lambda_new) - np.zeros((grid_size - 1) * (grid_size - 1)))<1):
-#     print("eigenvalue is correct")
-#
-# print()
 
 
 # eigvals = sorted(lg.eigvalsh(A.todense()))
@@ -260,36 +226,43 @@ print("smallest eigenvalue is", eigenSum - lambda_new)
 # print("smallest true eigenvalue is " + str(norm - linalg.eigsh(norm * diags(np.ones((grid_size - 1) ** 2), 0) - A, k=1, return_eigenvectors=False)[0]))
 
 
+
 eigenSum = eigenSum + eigenSum - lambda_new
 
 # solving the system
 B = createB(h, grid_size + 1, u)
-print(B)
+# print(B)
 
 calculated_u = np.ones(((grid_size - 1) ** 2))
 previous_calculated_u = np.ones(((grid_size - 1) ** 2))
 
 w = 2 / eigenSum
 tau = B - A.dot(calculated_u)
-
 error = 1
+count = 0
+
+
 while np.linalg.norm(tau) > epsilon:
     temp = calculated_u
     calculated_u = previous_calculated_u + w * (B - A.dot(previous_calculated_u))
     previous_calculated_u = temp
 
     tau = B - A.dot(calculated_u)
+    if (count % 10 == 0) & (h < 0.02):
+        sys.stdout.write(f"\r abs: {np.linalg.norm(tau)}")
+        sys.stdout.flush()
+    count = count + 1
 
 
 temp = scipy.sparse.csr_matrix(A)
 realSolution = scipy.sparse.linalg.spsolve(temp, B)
 
 
-# print("solution is")
-# print(calculated_u)
-#
-# print("real solution is")
-# print(realSolution)
+print("solution is")
+print(calculated_u)
+
+print("real solution is")
+print(realSolution)
 
 
 index = -1
